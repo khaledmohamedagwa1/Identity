@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Infrastructure building blocks: ModuleDbContext base (schema per module, typed id converters, tenant filter, optimistic concurrency), PostgreSQL RLS interceptor and migration helpers, transactional outbox, inbox, idempotency store, EF unit of work.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Platform.Application\Platform.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

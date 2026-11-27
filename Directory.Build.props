@@ -1,0 +1,34 @@
+<Project>
+  <!-- Shared build settings for every project in the repository (F-01). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <MSBuildTreatWarningsAsErrors>true</MSBuildTreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: missing XML comments. Public API docs are required on contracts only (see Contracts props). -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Company>Identity Platform</Company>
+    <Product>Multi-Tenant Identity &amp; Authorization Platform</Product>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+    <!-- Central package management: every PackageReference must be listed in Directory.Packages.props (TC-F01-03). -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests')) Or $(MSBuildProjectName.EndsWith('.Testing'))">
+    <IsPackable>false</IsPackable>
+    <!-- Test naming follows TC_<Task>_<nn>_<Scenario>; underscores in member names are intended. -->
+    <NoWarn>$(NoWarn);CA1707;CA1515;CA1861;CA2007;CA1063;CA1816;CA1001;CA1849;CA2000;CA1822;CA1859;CA1812</NoWarn>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,8 @@
+<Project>
+  <!-- TC-F01-03: a PackageReference without a central version fails restore (NU1010) because
+       ManagePackageVersionsCentrally is on; VersionOverride is forbidden so CPM cannot be bypassed. -->
+  <Target Name="ForbidVersionOverride" BeforeTargets="CollectPackageReferences">
+    <Error Condition="'@(PackageReference->HasMetadata(VersionOverride))' != ''"
+           Text="VersionOverride is not allowed. Add or change the version in Directory.Packages.props (central package management)." />
+  </Target>
+</Project>

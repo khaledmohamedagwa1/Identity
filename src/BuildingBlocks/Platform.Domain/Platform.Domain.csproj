@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>DDD building blocks: Entity, AggregateRoot, ValueObject, domain events, Result and Error, strongly typed UUIDv7 IDs. No package references (architecture rule).</Description>
+  </PropertyGroup>
+</Project>

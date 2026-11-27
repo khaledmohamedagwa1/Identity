@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CQRS-lite building blocks: commands, queries, the in-house dispatcher and its fixed pipeline (logging, validation, tenant guard, idempotency, unit of work, audit), ITenantContext.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Platform.Domain\Platform.Domain.csproj" />
+    <ProjectReference Include="..\Platform.Contracts\Platform.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Platform.BuildingBlocks.Tests" />
+  </ItemGroup>
+</Project>

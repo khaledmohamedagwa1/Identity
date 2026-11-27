@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Contract primitives shared by every module's Contracts project: integration event base types and schema metadata. No dependencies.</Description>
+  </PropertyGroup>
+</Project>
