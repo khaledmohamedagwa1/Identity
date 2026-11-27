@@ -1,0 +1,6991 @@
+# Identity Platform Admin API v1 - frozen at G0 (F-06). Changes need a contract-change PR (docs/contract-changes/).
+openapi: 3.1.0
+info:
+  title: Identity Platform Admin API
+  version: 1.0.0
+  description: Management REST API for the admin and account portals and for automation (spec section 9.4). The tenant is always taken from the
+    access token's `tid` claim, never from a header or path. Writes return `X-Authz-Revision`; pass it as `minRevision` to the PDP for read-your-writes
+    (section 5.5). Errors are RFC 9457 Problem Details with a stable `code`. Endpoints marked (P2)/(P3) are frozen in shape now and implemented
+    in that phase. Additive changes only within v1 (ADR-0011).
+  license:
+    name: Proprietary
+  contact:
+    name: Platform team (lane L0)
+servers:
+- url: /api/v1
+security:
+- bearer: []
+tags:
+- name: Platform
+- name: Tenant
+- name: Organization
+- name: Members
+- name: Access
+- name: Clients
+- name: Federation
+- name: Audit
+- name: Me
+paths:
+  /platform/tenants:
+    get:
+      operationId: listTenants
+      summary: List tenants
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tenant'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `platform_tenants_read`.
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      - name: q
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          $ref: '#/components/schemas/TenantStatus'
+    post:
+      operationId: createTenant
+      summary: Create a tenant (UC-01)
+      tags:
+      - Platform
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Creates the tenant, its root org node and the owner invitation (through events). Requires permission `platform_tenants_manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+  /platform/tenants/{id}:
+    get:
+      operationId: getTenant
+      summary: Get a tenant
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get a tenant.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateTenant
+      summary: Update tenant name or plan
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Update tenant name or plan.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTenantRequest'
+    delete:
+      operationId: requestTenantDeletion
+      summary: Request deletion (30-day grace period)
+      tags:
+      - Platform
+      responses:
+        '202':
+          description: Accepted
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Request deletion (30-day grace period).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /platform/tenants/{id}/suspend:
+    post:
+      operationId: suspendTenant
+      summary: Suspend a tenant
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Suspend a tenant.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+  /platform/tenants/{id}/reactivate:
+    post:
+      operationId: reactivateTenant
+      summary: Reactivate a tenant
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Reactivate a tenant.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+  /platform/plans:
+    get:
+      operationId: listPlans
+      summary: List plans
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List plans.
+    post:
+      operationId: createPlan
+      summary: Create a plan
+      tags:
+      - Platform
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create a plan.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+  /platform/plans/{id}:
+    put:
+      operationId: updatePlan
+      summary: Update a plan
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Update a plan.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+  /platform/impersonation-requests:
+    get:
+      operationId: listImpersonationRequests
+      summary: List impersonation requests
+      tags:
+      - Platform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ImpersonationRequest'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List impersonation requests.
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createImpersonationRequest
+      summary: Request impersonation (UC-13, P3)
+      tags:
+      - Platform
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationRequest'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Request impersonation (UC-13, P3).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateImpersonationRequest'
+  /tenant:
+    get:
+      operationId: getCurrentTenant
+      summary: Get the current tenant (from the token)
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get the current tenant (from the token).
+    patch:
+      operationId: updateCurrentTenant
+      summary: Update tenant settings
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `tenant_settings_manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTenantSettingsRequest'
+  /tenant/domains:
+    get:
+      operationId: listDomains
+      summary: List domains
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TenantDomain'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List domains.
+    post:
+      operationId: addDomain
+      summary: Add a domain; returns the DNS TXT record to create
+      tags:
+      - Tenant
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDomain'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `tenant_domains_manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddDomainRequest'
+  /tenant/domains/{id}:
+    delete:
+      operationId: removeDomain
+      summary: Remove a domain
+      tags:
+      - Tenant
+      responses:
+        '204':
+          description: Removed
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Remove a domain.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /tenant/domains/{id}/verify:
+    post:
+      operationId: verifyDomain
+      summary: Check the DNS TXT record now
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDomain'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Check the DNS TXT record now.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /tenant/branding:
+    get:
+      operationId: getBranding
+      summary: Get branding
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branding'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get branding.
+    put:
+      operationId: updateBranding
+      summary: Replace branding
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branding'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Replace branding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Branding'
+  /tenant/policies:
+    get:
+      operationId: getPolicies
+      summary: Get security policies
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPolicies'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get security policies.
+    put:
+      operationId: updatePolicies
+      summary: Replace security policies (BR-11)
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPolicies'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Replace security policies (BR-11).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantPolicies'
+  /tenant/grants:
+    get:
+      operationId: listTenantGrants
+      summary: List partner grants (P3)
+      tags:
+      - Tenant
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TenantGrant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List partner grants (P3).
+    post:
+      operationId: createTenantGrant
+      summary: Grant a partner tenant a role at a scope (P3)
+      tags:
+      - Tenant
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantGrant'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Grant a partner tenant a role at a scope (P3).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantGrantRequest'
+  /tenant/grants/{id}:
+    delete:
+      operationId: revokeTenantGrant
+      summary: Revoke a partner grant
+      tags:
+      - Tenant
+      responses:
+        '204':
+          description: Revoked
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Revoke a partner grant.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /org/node-types:
+    get:
+      operationId: listNodeTypes
+      summary: List node types
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NodeType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List node types.
+    post:
+      operationId: createNodeType
+      summary: Create a node type
+      tags:
+      - Organization
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeType'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create a node type.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodeTypeInput'
+  /org/node-types/{id}:
+    put:
+      operationId: updateNodeType
+      summary: Update a node type
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeType'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Update a node type.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodeTypeInput'
+  /org/nodes:
+    get:
+      operationId: listNodes
+      summary: List children of a node (root when parentId is omitted)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrgNode'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `org_read`.
+      parameters:
+      - name: parentId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: depth
+        in: query
+        description: Return descendants up to this depth (default 1 = children).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 1
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createNode
+      summary: Create a node
+      tags:
+      - Organization
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `org_nodes_manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNodeRequest'
+  /org/nodes/search:
+    get:
+      operationId: searchNodes
+      summary: Search nodes by name or code
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrgNode'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Search nodes by name or code.
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+  /org/nodes/{id}:
+    get:
+      operationId: getNode
+      summary: Get a node
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get a node.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateNode
+      summary: Rename, change code or attributes
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Rename, change code or attributes.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNodeRequest'
+  /org/nodes/{id}/ancestors:
+    get:
+      operationId: getNodeAncestors
+      summary: Breadcrumb from the root to the node (C4)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrgNodeSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Breadcrumb from the root to the node (C4).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /org/nodes/{id}/move/preview:
+    post:
+      operationId: previewMoveNode
+      summary: Preview a move (UC-09)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovePreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Preview a move (UC-09).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveNodeRequest'
+  /org/nodes/{id}/move:
+    post:
+      operationId: moveNode
+      summary: Move a node under a new parent (C11)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Move a node under a new parent (C11).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveNodeRequest'
+  /org/nodes/{id}/block-inheritance/preview:
+    post:
+      operationId: previewBlockInheritanceNode
+      summary: 'Preview: block inheritance (c6)'
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: 'Preview: block inheritance (c6).'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/block-inheritance:
+    post:
+      operationId: blockInheritanceNode
+      summary: Block inheritance (C6)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `org_inheritance_manage`.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/unblock-inheritance/preview:
+    post:
+      operationId: previewUnblockInheritanceNode
+      summary: 'Preview: unblock inheritance'
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: 'Preview: unblock inheritance.'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/unblock-inheritance:
+    post:
+      operationId: unblockInheritanceNode
+      summary: Unblock inheritance
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `org_inheritance_manage`.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/suspend/preview:
+    post:
+      operationId: previewSuspendNode
+      summary: 'Preview: suspend a node (c14)'
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: 'Preview: suspend a node (c14).'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/suspend:
+    post:
+      operationId: suspendNode
+      summary: Suspend a node (C14)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `org_nodes_manage`.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/archive/preview:
+    post:
+      operationId: previewArchiveNode
+      summary: 'Preview: archive a node (c13)'
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: 'Preview: archive a node (c13).'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveNodeRequest'
+  /org/nodes/{id}/archive:
+    post:
+      operationId: archiveNode
+      summary: Archive a node (C13)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `org_nodes_manage`.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveNodeRequest'
+  /org/nodes/{id}/restore/preview:
+    post:
+      operationId: previewRestoreNode
+      summary: 'Preview: restore an archived node within 30 days'
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: 'Preview: restore an archived node within 30 days.'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/restore:
+    post:
+      operationId: restoreNode
+      summary: Restore an archived node within 30 days
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `org_nodes_manage`.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedRequest'
+  /org/nodes/{id}/merge/preview:
+    post:
+      operationId: previewMergeNode
+      summary: Preview merging this node into a target (C12)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Preview merging this node into a target (C12).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeNodeRequest'
+  /org/nodes/{id}/merge:
+    post:
+      operationId: mergeNode
+      summary: Merge this node into a target (C12)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgNode'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Merge this node into a target (C12).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeNodeRequest'
+  /org/import:
+    post:
+      operationId: importNodes
+      summary: Import nodes from CSV (code,name,type,parentCode)
+      tags:
+      - Organization
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Import nodes from CSV (code,name,type,parentCode).
+      parameters:
+      - name: dryRun
+        in: query
+        schema:
+          type: boolean
+          default: true
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+  /members:
+    get:
+      operationId: listMembers
+      summary: List members
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Member'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List members.
+      parameters:
+      - name: nodeId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          $ref: '#/components/schemas/MembershipStatus'
+      - name: roleId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: q
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+  /members/{id}:
+    get:
+      operationId: getMember
+      summary: Get a member
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get a member.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateMember
+      summary: Change home units or type
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Change home units or type.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRequest'
+    delete:
+      operationId: removeMember
+      summary: Remove a member (C27; BR-02 last owner rule)
+      tags:
+      - Members
+      responses:
+        '204':
+          description: Removed
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Remove a member (C27; BR-02 last owner rule).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /members/{id}/suspend:
+    post:
+      operationId: suspendMember
+      summary: Suspend a member
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Suspend a member.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+  /members/{id}/reactivate:
+    post:
+      operationId: reactivateMember
+      summary: Reactivate a member
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Reactivate a member.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /invitations:
+    get:
+      operationId: listInvitations
+      summary: List invitations
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invitation'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List invitations.
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: inviteMember
+      summary: Invite a user to a unit with a role (UC-03)
+      tags:
+      - Members
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: The role must pass the delegation ceiling (BR-06). Requires permission `users_invite`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+  /invitations/{id}:
+    delete:
+      operationId: revokeInvitation
+      summary: Revoke an invitation
+      tags:
+      - Members
+      responses:
+        '204':
+          description: Revoked
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Revoke an invitation.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /invitations/{id}/resend:
+    post:
+      operationId: resendInvitation
+      summary: Resend an invitation with a new token
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Resend an invitation with a new token.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /groups:
+    get:
+      operationId: listGroups
+      summary: List groups
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Group'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List groups.
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createGroup
+      summary: Create a group
+      tags:
+      - Members
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create a group.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupInput'
+  /groups/{id}:
+    get:
+      operationId: getGroup
+      summary: Get a group
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get a group.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: updateGroup
+      summary: Rename a group
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Rename a group.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupInput'
+    delete:
+      operationId: deleteGroup
+      summary: Delete a group
+      tags:
+      - Members
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete a group.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /groups/{id}/members:
+    get:
+      operationId: listGroupMembers
+      summary: List group members
+      tags:
+      - Members
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupMember'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List group members.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: addGroupMember
+      summary: Add a member (nesting depth ≤ 3, no cycles; ceiling applies)
+      tags:
+      - Members
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMember'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Add a member (nesting depth ≤ 3, no cycles; ceiling applies).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubjectRef'
+  /groups/{id}/members/{memberId}:
+    delete:
+      operationId: removeGroupMember
+      summary: Remove a member
+      tags:
+      - Members
+      responses:
+        '204':
+          description: Removed
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Remove a member.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: memberId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /applications:
+    get:
+      operationId: listApplications
+      summary: List registered applications
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List registered applications.
+  /applications/{appId}/permissions:
+    get:
+      operationId: getPermissionCatalog
+      summary: Get an application's permission catalog
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionCatalog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get an application's permission catalog.
+      parameters:
+      - name: appId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: registerPermissionCatalog
+      summary: Register a new catalog version (platform developers only)
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionCatalog'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Register a new catalog version (platform developers only).
+      parameters:
+      - name: appId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionCatalogInput'
+  /roles:
+    get:
+      operationId: listRoles
+      summary: List system and custom roles
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List system and custom roles.
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createRole
+      summary: Create a custom role (or clone with cloneFromRoleId)
+      tags:
+      - Access
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `roles_manage`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+  /roles/{id}:
+    get:
+      operationId: getRole
+      summary: Get a role
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get a role.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: updateRole
+      summary: 'Change a custom role (BR-09: system roles are immutable)'
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: 'Change a custom role (BR-09: system roles are immutable).'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+    delete:
+      operationId: deleteRole
+      summary: Delete an unused custom role
+      tags:
+      - Access
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete an unused custom role.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /roles/{id}/impact-preview:
+    post:
+      operationId: previewRoleChange
+      summary: Preview the effect of a role change (C25)
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleImpactPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Preview the effect of a role change (C25).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+  /assignments:
+    get:
+      operationId: listAssignments
+      summary: List assignments by subject or by scope
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RoleAssignment'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List assignments by subject or by scope.
+      parameters:
+      - name: subjectId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: scopeNodeId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createAssignment
+      summary: Assign a role at a scope (BR-04..BR-07, C15)
+      tags:
+      - Access
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleAssignment'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `roles_assign`.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssignmentRequest'
+  /assignments/{id}:
+    get:
+      operationId: getAssignment
+      summary: Get an assignment
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleAssignment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get an assignment.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: revokeAssignment
+      summary: Revoke an assignment
+      tags:
+      - Access
+      responses:
+        '204':
+          description: Revoked
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Revoke an assignment.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /delegations:
+    get:
+      operationId: listDelegations
+      summary: List deputy delegations (P2)
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Delegation'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List deputy delegations (P2).
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createDelegation
+      summary: Delegate one of your assignments (C19, P2)
+      tags:
+      - Access
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delegate one of your assignments (C19, P2).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDelegationRequest'
+  /delegations/{id}:
+    delete:
+      operationId: revokeDelegation
+      summary: Revoke a delegation
+      tags:
+      - Access
+      responses:
+        '204':
+          description: Revoked
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Revoke a delegation.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /access/explain:
+    post:
+      operationId: explainAccess
+      summary: Explain why a subject has a permission (proxy to PDP expand, UC-11)
+      tags:
+      - Access
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplainResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `access_explain`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExplainRequest'
+  /clients:
+    get:
+      operationId: listClients
+      summary: List OAuth clients
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Client'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List OAuth clients.
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createClient
+      summary: Register a client
+      tags:
+      - Clients
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientWithSecret'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Redirect URIs must be absolute and exact (no wildcards).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientInput'
+  /clients/{id}:
+    get:
+      operationId: getClient
+      summary: Get a client
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get a client.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: updateClient
+      summary: Update a client
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Update a client.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientInput'
+    delete:
+      operationId: deleteClient
+      summary: Delete a client
+      tags:
+      - Clients
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete a client.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /clients/{id}/secrets:
+    post:
+      operationId: rotateClientSecret
+      summary: Rotate the secret (two active, old expires)
+      tags:
+      - Clients
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientSecret'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Rotate the secret (two active, old expires).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotateSecretRequest'
+  /clients/{id}/keys:
+    put:
+      operationId: setClientKeys
+      summary: Set the client JWKS for private_key_jwt (P2)
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Set the client JWKS for private_key_jwt (P2).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientKeysInput'
+  /resources:
+    get:
+      operationId: listApiResources
+      summary: List API resources (G-03)
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiResource'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List API resources (G-03).
+    post:
+      operationId: createApiResource
+      summary: Register an API resource with scopes (G-03)
+      tags:
+      - Clients
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResource'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Register an API resource with scopes (G-03).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiResourceInput'
+  /resources/{id}:
+    put:
+      operationId: updateApiResource
+      summary: Update an API resource
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResource'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Update an API resource.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiResourceInput'
+    delete:
+      operationId: deleteApiResource
+      summary: Delete an API resource
+      tags:
+      - Clients
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete an API resource.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /token-exchange-policies:
+    get:
+      operationId: listTokenExchangePolicies
+      summary: List token exchange policies (P2)
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TokenExchangePolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List token exchange policies (P2).
+    post:
+      operationId: createTokenExchangePolicy
+      summary: Create a token exchange policy (P2)
+      tags:
+      - Clients
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExchangePolicy'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create a token exchange policy (P2).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenExchangePolicyInput'
+  /token-exchange-policies/{id}:
+    delete:
+      operationId: deleteTokenExchangePolicy
+      summary: Delete a token exchange policy
+      tags:
+      - Clients
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete a token exchange policy.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /service-accounts:
+    get:
+      operationId: listServiceAccounts
+      summary: List service accounts
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ServiceAccount'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List service accounts.
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    post:
+      operationId: createServiceAccount
+      summary: Create a service account with its machine client
+      tags:
+      - Clients
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccount'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create a service account with its machine client.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceAccountInput'
+  /service-accounts/{id}:
+    patch:
+      operationId: updateServiceAccount
+      summary: Enable, disable or rename
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccount'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Enable, disable or rename.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceAccountUpdate'
+  /service-accounts/{id}/federated-credentials:
+    get:
+      operationId: listFederatedCredentials
+      summary: List workload federation trusts (P3)
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FederatedCredential'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List workload federation trusts (P3).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: addFederatedCredential
+      summary: Add a workload federation trust (P3)
+      tags:
+      - Clients
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederatedCredential'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Add a workload federation trust (P3).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederatedCredentialInput'
+  /api-keys:
+    get:
+      operationId: listApiKeys
+      summary: List API keys (P2)
+      tags:
+      - Clients
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApiKey'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List API keys (P2).
+    post:
+      operationId: createApiKey
+      summary: Create an API key; the secret is shown once (P2)
+      tags:
+      - Clients
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyWithSecret'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create an API key; the secret is shown once (P2).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyInput'
+  /api-keys/{id}:
+    delete:
+      operationId: revokeApiKey
+      summary: Revoke an API key
+      tags:
+      - Clients
+      responses:
+        '204':
+          description: Revoked
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Revoke an API key.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /idp-connections:
+    get:
+      operationId: listIdpConnections
+      summary: List identity provider connections (P2)
+      tags:
+      - Federation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdpConnection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List identity provider connections (P2).
+    post:
+      operationId: createIdpConnection
+      summary: Create an OIDC or SAML connection (P2)
+      tags:
+      - Federation
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdpConnection'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create an OIDC or SAML connection (P2).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdpConnectionInput'
+  /idp-connections/{id}:
+    get:
+      operationId: getIdpConnection
+      summary: Get a connection
+      tags:
+      - Federation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdpConnection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Get a connection.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: updateIdpConnection
+      summary: Update a connection
+      tags:
+      - Federation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdpConnection'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Update a connection.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdpConnectionInput'
+    delete:
+      operationId: deleteIdpConnection
+      summary: Delete a connection
+      tags:
+      - Federation
+      responses:
+        '204':
+          description: Deleted
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete a connection.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /idp-connections/{id}/test:
+    post:
+      operationId: testIdpConnection
+      summary: Start a test login; returns the URL to open
+      tags:
+      - Federation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - url
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Start a test login; returns the URL to open.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /idp-connections/{id}/enforce:
+    post:
+      operationId: enforceIdpConnection
+      summary: Enforce SSO for the connection's verified domains (BR-10)
+      tags:
+      - Federation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdpConnection'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Enforce SSO for the connection's verified domains (BR-10).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - enforced
+              properties:
+                enforced:
+                  type: boolean
+  /idp-connections/{id}/claim-mappings:
+    put:
+      operationId: setClaimMappings
+      summary: Replace JIT claim mappings (C26)
+      tags:
+      - Federation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClaimMapping'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Replace JIT claim mappings (C26).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClaimMapping'
+  /scim/tokens:
+    get:
+      operationId: listScimTokens
+      summary: List SCIM tokens (P2)
+      tags:
+      - Federation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScimToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List SCIM tokens (P2).
+    post:
+      operationId: createScimToken
+      summary: Create a SCIM token; shown once (P2)
+      tags:
+      - Federation
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScimTokenWithSecret'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create a SCIM token; shown once (P2).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresAt:
+                  type: string
+                  format: date-time
+  /scim/tokens/{id}:
+    delete:
+      operationId: revokeScimToken
+      summary: Revoke a SCIM token
+      tags:
+      - Federation
+      responses:
+        '204':
+          description: Revoked
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Revoke a SCIM token.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /audit:
+    get:
+      operationId: queryAudit
+      summary: Query audit entries
+      tags:
+      - Audit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `audit_read`.
+      parameters:
+      - name: actorId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: target
+        in: query
+        schema:
+          type: string
+      - name: action
+        in: query
+        schema:
+          type: string
+      - name: nodeId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+  /audit/export:
+    get:
+      operationId: exportAudit
+      summary: Export audit entries (streamed)
+      tags:
+      - Audit
+      responses:
+        '200':
+          description: Export
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/x-ndjson:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Requires permission `audit_read`.
+      parameters:
+      - name: actorId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: target
+        in: query
+        schema:
+          type: string
+      - name: action
+        in: query
+        schema:
+          type: string
+      - name: nodeId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+  /webhooks:
+    get:
+      operationId: listWebhooks
+      summary: List webhook subscriptions (P2)
+      tags:
+      - Audit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: List webhook subscriptions (P2).
+    post:
+      operationId: createWebhook
+      summary: Create a webhook subscription; the signing secret is shown once (P2)
+      tags:
+      - Audit
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookWithSecret'
+          headers:
+            X-Authz-Revision:
+              $ref: '#/components/headers/XAuthzRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Create a webhook subscription; the signing secret is shown once (P2).
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookInput'
+  /webhooks/{id}:
+    delete:
+      operationId: deleteWebhook
+      summary: Delete a subscription
+      tags:
+      - Audit
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete a subscription.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /webhooks/{id}/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: Delivery log
+      tags:
+      - Audit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookDelivery'
+                  nextCursor:
+                    type:
+                    - string
+                    - 'null'
+                    description: Opaque cursor for the next page; null on the last page.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delivery log.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+  /webhooks/{id}/redeliver:
+    post:
+      operationId: redeliverWebhook
+      summary: Redeliver one delivery
+      tags:
+      - Audit
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Redeliver one delivery.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - deliveryId
+              properties:
+                deliveryId:
+                  type: string
+                  format: uuid
+  /me:
+    get:
+      operationId: getMe
+      summary: My profile
+      tags:
+      - Me
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: My profile.
+    patch:
+      operationId: updateMe
+      summary: Update my profile
+      tags:
+      - Me
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Update my profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+    delete:
+      operationId: deleteMe
+      summary: Delete my account (GDPR, P3)
+      tags:
+      - Me
+      responses:
+        '202':
+          description: Accepted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete my account (GDPR, P3).
+  /me/email:
+    post:
+      operationId: changeMyEmail
+      summary: Start an email change; verification sent to the new address
+      tags:
+      - Me
+      responses:
+        '202':
+          description: Accepted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Start an email change; verification sent to the new address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              properties:
+                email:
+                  type: string
+                  format: email
+  /me/password:
+    post:
+      operationId: changeMyPassword
+      summary: Change my password (recent authentication required)
+      tags:
+      - Me
+      responses:
+        '204':
+          description: Changed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Change my password (recent authentication required).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+  /me/mfa:
+    get:
+      operationId: listMyMfa
+      summary: My MFA factors
+      tags:
+      - Me
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MfaFactor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: My MFA factors.
+  /me/passkeys:
+    get:
+      operationId: listMyPasskeys
+      summary: My passkeys
+      tags:
+      - Me
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Passkey'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: My passkeys.
+  /me/passkeys/{id}:
+    delete:
+      operationId: deleteMyPasskey
+      summary: Delete a passkey
+      tags:
+      - Me
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Delete a passkey.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /me/sessions:
+    get:
+      operationId: listMySessions
+      summary: My sessions
+      tags:
+      - Me
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: My sessions.
+  /me/sessions/{id}:
+    delete:
+      operationId: endMySession
+      summary: Sign out a session
+      tags:
+      - Me
+      responses:
+        '204':
+          description: Ended
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Sign out a session.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /me/tenants:
+    get:
+      operationId: listMyTenants
+      summary: Tenants I belong to (tenant switcher)
+      tags:
+      - Me
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MyTenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Tenants I belong to (tenant switcher).
+  /me/apps:
+    get:
+      operationId: listMyApps
+      summary: Apps I granted consent to
+      tags:
+      - Me
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConnectedApp'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Apps I granted consent to.
+  /me/apps/{id}:
+    delete:
+      operationId: revokeMyApp
+      summary: Revoke consent for an app
+      tags:
+      - Me
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Revoke consent for an app.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /me/export:
+    post:
+      operationId: exportMyData
+      summary: Request a data export (P3)
+      tags:
+      - Me
+      responses:
+        '202':
+          description: Accepted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      description: Request a data export (P3).
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token with aud = AdminApi resource. Portals use it via the BFF (no tokens in the browser).
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: Opaque cursor from a previous page.
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      schema:
+        type: string
+        maxLength: 200
+      description: 'Retry-safe creation: repeating the key returns the first result.'
+  headers:
+    XAuthzRevision:
+      description: Authorization revision of this write (per tenant, commit-ordered; ADR-0017).
+      schema:
+        type: integer
+        format: int64
+  responses:
+    BadRequest:
+      description: Validation failed (code platform.validation_failed or a domain code).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing or invalid access token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Not permitted, or tenant context missing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Not found or not visible in this tenant.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: 'Conflict: duplicate, illegal state change or stale version (platform.concurrency_conflict).'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: Rate limited; see Retry-After.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      required:
+      - type
+      - title
+      - status
+      - code
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          examples:
+          - urn:platform:error:org.node.cycle
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+          description: Stable error code.
+        traceId:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: Field errors (validation only).
+    TenantStatus:
+      type: string
+      enum:
+      - Active
+      - Suspended
+      - PendingDeletion
+      - Deleted
+    Tenant:
+      type: object
+      required:
+      - id
+      - slug
+      - name
+      - status
+      - planId
+      - createdAt
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          pattern: ^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TenantStatus'
+        planId:
+          type: string
+          format: uuid
+        parentTenantId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        selfSignupPolicy:
+          $ref: '#/components/schemas/SelfSignupPolicy'
+        defaultLocale:
+          type: string
+          enum:
+          - en
+          - ar
+        createdAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    SelfSignupPolicy:
+      type: string
+      enum:
+      - InviteOnly
+      - VerifiedDomainAutoJoin
+      - VerifiedDomainWithApproval
+      - Open
+      description: G-18. Default InviteOnly.
+    CreateTenantRequest:
+      type: object
+      required:
+      - slug
+      - name
+      - planId
+      - ownerEmail
+      properties:
+        slug:
+          type: string
+          pattern: ^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        planId:
+          type: string
+          format: uuid
+        ownerEmail:
+          type: string
+          format: email
+        parentTenantId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    UpdateTenantRequest:
+      type: object
+      required:
+      - version
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        planId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    UpdateTenantSettingsRequest:
+      type: object
+      required:
+      - version
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        selfSignupPolicy:
+          $ref: '#/components/schemas/SelfSignupPolicy'
+        defaultLocale:
+          type: string
+          enum:
+          - en
+          - ar
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    ReasonRequest:
+      type: object
+      required: []
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+    VersionedRequest:
+      type: object
+      required:
+      - version
+      properties:
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    Plan:
+      type: object
+      required:
+      - id
+      - name
+      - limits
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        limits:
+          $ref: '#/components/schemas/PlanLimits'
+    PlanInput:
+      type: object
+      required:
+      - name
+      - limits
+      properties:
+        name:
+          type: string
+        limits:
+          $ref: '#/components/schemas/PlanLimits'
+    PlanLimits:
+      type: object
+      required:
+      - maxUsers
+      - maxNodes
+      - maxDepth
+      - maxSsoConnections
+      - maxCustomRoles
+      properties:
+        maxUsers:
+          type: integer
+          minimum: 0
+        maxNodes:
+          type: integer
+          minimum: 0
+        maxDepth:
+          type: integer
+          minimum: 0
+        maxSsoConnections:
+          type: integer
+          minimum: 0
+        maxCustomRoles:
+          type: integer
+          minimum: 0
+    ImpersonationRequest:
+      type: object
+      required:
+      - id
+      - targetUserId
+      - reason
+      - status
+      - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        targetUserId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        status:
+          type: string
+          enum:
+          - Pending
+          - Approved
+          - Rejected
+          - Active
+          - Ended
+        expiresAt:
+          type: string
+          format: date-time
+    CreateImpersonationRequest:
+      type: object
+      required:
+      - tenantId
+      - targetUserId
+      - reason
+      - durationMinutes
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        targetUserId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          minLength: 10
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 60
+    TenantDomain:
+      type: object
+      required:
+      - id
+      - domain
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+        status:
+          type: string
+          enum:
+          - Pending
+          - Verified
+          - Failed
+        txtRecordName:
+          type: string
+          examples:
+          - _platform-verify.acme.com
+        txtRecordValue:
+          type: string
+        verifiedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        ssoEnforced:
+          type: boolean
+    AddDomainRequest:
+      type: object
+      required:
+      - domain
+      properties:
+        domain:
+          type: string
+          format: hostname
+    Branding:
+      type: object
+      required: []
+      properties:
+        logoUrl:
+          type: string
+          format: uri
+        faviconUrl:
+          type: string
+          format: uri
+        primaryColor:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+        backgroundUrl:
+          type: string
+          format: uri
+        textOverrides:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+          description: locale → key → text
+    TenantPolicies:
+      type: object
+      required:
+      - password
+      - mfa
+      - session
+      properties:
+        password:
+          type: object
+          required:
+          - minLength
+          properties:
+            minLength:
+              type: integer
+              minimum: 12
+            breachCheck:
+              type: boolean
+              default: true
+        mfa:
+          type: object
+          required:
+          - required
+          properties:
+            required:
+              type: string
+              enum:
+              - 'Off'
+              - AdminsOnly
+              - All
+            allowedMethods:
+              type: array
+              items:
+                type: string
+                enum:
+                - totp
+                - passkey
+                - recovery_code
+        session:
+          type: object
+          required:
+          - idleMinutes
+          - absoluteHours
+          properties:
+            idleMinutes:
+              type: integer
+              minimum: 5
+            absoluteHours:
+              type: integer
+              minimum: 1
+            rememberDeviceDays:
+              type: integer
+              minimum: 0
+        ipAllowList:
+          type: array
+          items:
+            type: string
+            description: CIDR
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    TenantGrant:
+      type: object
+      required:
+      - id
+      - granteeTenantId
+      - roleId
+      - scopeNodeId
+      - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        granteeTenantId:
+          type: string
+          format: uuid
+        roleId:
+          type: string
+          format: uuid
+        scopeNodeId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+    CreateTenantGrantRequest:
+      type: object
+      required:
+      - granteeTenantId
+      - roleId
+      - scopeNodeId
+      - expiresAt
+      properties:
+        granteeTenantId:
+          type: string
+          format: uuid
+        roleId:
+          type: string
+          format: uuid
+        scopeNodeId:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+    NodeType:
+      type: object
+      required:
+      - id
+      - name
+      - allowedChildTypeIds
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        allowedChildTypeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        maxDepth:
+          type:
+          - integer
+          - 'null'
+    NodeTypeInput:
+      type: object
+      required:
+      - name
+      - allowedChildTypeIds
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        allowedChildTypeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        maxDepth:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 15
+    NodeStatus:
+      type: string
+      enum:
+      - Active
+      - Suspended
+      - Archived
+    OrgNode:
+      type: object
+      required:
+      - id
+      - parentId
+      - typeId
+      - name
+      - status
+      - inheritanceBlocked
+      - hasChildren
+      - childCount
+      - depth
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        parentId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        typeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type:
+          - string
+          - 'null'
+        status:
+          $ref: '#/components/schemas/NodeStatus'
+        inheritanceBlocked:
+          type: boolean
+        hasChildren:
+          type: boolean
+        childCount:
+          type: integer
+        depth:
+          type: integer
+          description: Root is 0.
+        attributes:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    OrgNodeSummary:
+      type: object
+      required:
+      - id
+      - name
+      - typeId
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        typeId:
+          type: string
+          format: uuid
+    CreateNodeRequest:
+      type: object
+      required:
+      - parentId
+      - typeId
+      - name
+      properties:
+        parentId:
+          type: string
+          format: uuid
+        typeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        code:
+          type: string
+          maxLength: 50
+        attributes:
+          type: object
+          additionalProperties: true
+    UpdateNodeRequest:
+      type: object
+      required:
+      - version
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        code:
+          type:
+          - string
+          - 'null'
+          maxLength: 50
+        attributes:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    MoveNodeRequest:
+      type: object
+      required:
+      - newParentId
+      - version
+      properties:
+        newParentId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    ArchiveNodeRequest:
+      type: object
+      required:
+      - version
+      properties:
+        cascadeTargetId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    MergeNodeRequest:
+      type: object
+      required:
+      - targetNodeId
+      - version
+      properties:
+        targetNodeId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    AccessChange:
+      type: object
+      required:
+      - subjectId
+      - subjectType
+      - subjectName
+      - change
+      - nodeIds
+      properties:
+        subjectId:
+          type: string
+          format: uuid
+        subjectType:
+          $ref: '#/components/schemas/SubjectType'
+        subjectName:
+          type: string
+        change:
+          type: string
+          enum:
+          - Gains
+          - Loses
+        nodeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        permissions:
+          type: array
+          items:
+            type: string
+    Violation:
+      type: object
+      required:
+      - code
+      - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    ImpactPreview:
+      type: object
+      required:
+      - violations
+      - accessChanges
+      properties:
+        violations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Violation'
+        accessChanges:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessChange'
+    MovePreview:
+      allOf:
+      - $ref: '#/components/schemas/ImpactPreview'
+      - type: object
+        required:
+        - resultingDepth
+        properties:
+          resultingDepth:
+            type: integer
+    ImportResult:
+      type: object
+      required:
+      - dryRun
+      - rows
+      - errors
+      properties:
+        dryRun:
+          type: boolean
+        rows:
+          type: integer
+        created:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+            - row
+            - code
+            - message
+            properties:
+              row:
+                type: integer
+              code:
+                type: string
+              message:
+                type: string
+    SubjectType:
+      type: string
+      enum:
+      - User
+      - Group
+      - ServiceAccount
+    SubjectRef:
+      type: object
+      required:
+      - type
+      - id
+      properties:
+        type:
+          $ref: '#/components/schemas/SubjectType'
+        id:
+          type: string
+          format: uuid
+    MembershipStatus:
+      type: string
+      enum:
+      - Invited
+      - Active
+      - Suspended
+      - Removed
+    Member:
+      type: object
+      required:
+      - id
+      - userId
+      - email
+      - displayName
+      - type
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        type:
+          type: string
+          enum:
+          - Member
+          - Guest
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
+        primaryNodeId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        secondaryNodeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    MemberDetails:
+      allOf:
+      - $ref: '#/components/schemas/Member'
+      - type: object
+        required: []
+        properties:
+          assignments:
+            type: array
+            items:
+              $ref: '#/components/schemas/RoleAssignment'
+          groups:
+            type: array
+            items:
+              $ref: '#/components/schemas/Group'
+          activeSessions:
+            type: integer
+    UpdateMemberRequest:
+      type: object
+      required:
+      - version
+      properties:
+        primaryNodeId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        secondaryNodeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    Invitation:
+      type: object
+      required:
+      - id
+      - email
+      - nodeId
+      - roleId
+      - status
+      - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        nodeId:
+          type: string
+          format: uuid
+        roleId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - Pending
+          - Accepted
+          - Expired
+          - Revoked
+        expiresAt:
+          type: string
+          format: date-time
+    CreateInvitationRequest:
+      type: object
+      required:
+      - email
+      - nodeId
+      - roleId
+      properties:
+        email:
+          type: string
+          format: email
+        nodeId:
+          type: string
+          format: uuid
+        roleId:
+          type: string
+          format: uuid
+        mode:
+          $ref: '#/components/schemas/InheritanceMode'
+    Group:
+      type: object
+      required:
+      - id
+      - name
+      - memberCount
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        memberCount:
+          type: integer
+    GroupInput:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+    GroupMember:
+      type: object
+      required:
+      - type
+      - id
+      - displayName
+      properties:
+        type:
+          $ref: '#/components/schemas/SubjectType'
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+    Application:
+      type: object
+      required:
+      - id
+      - key
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{1,40}$
+        name:
+          type: string
+        catalogVersion:
+          type: integer
+    Permission:
+      type: object
+      required:
+      - key
+      - description
+      properties:
+        key:
+          type: string
+          pattern: ^[a-z][a-z0-9]*(_[a-z0-9]+)+$
+          description: snake_case, <resource>_<action> (ADR-0016)
+        description:
+          type: string
+        implies:
+          type: array
+          items:
+            type: string
+        conditions:
+          type: array
+          items:
+            type: string
+            enum:
+            - amount_limit
+            - ip_range
+            - working_hours
+        resourceTypes:
+          type: array
+          items:
+            type: string
+        category:
+          type: string
+          enum:
+          - admin
+          - business
+        sensitive:
+          type: boolean
+        deprecated:
+          type: boolean
+    PermissionCatalog:
+      type: object
+      required:
+      - applicationId
+      - version
+      - permissions
+      properties:
+        applicationId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+    PermissionCatalogInput:
+      type: object
+      required:
+      - permissions
+      properties:
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+    Role:
+      type: object
+      required:
+      - id
+      - name
+      - isSystem
+      - permissions
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        isSystem:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+        assignmentCount:
+          type: integer
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    CreateRoleRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        permissions:
+          type: array
+          items:
+            type: string
+        cloneFromRoleId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    UpdateRoleRequest:
+      type: object
+      required:
+      - permissions
+      - version
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        permissions:
+          type: array
+          items:
+            type: string
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    RoleImpactPreview:
+      type: object
+      required:
+      - assignments
+      - users
+      - addedPermissions
+      - removedPermissions
+      properties:
+        assignments:
+          type: integer
+        users:
+          type: integer
+        addedPermissions:
+          type: array
+          items:
+            type: string
+        removedPermissions:
+          type: array
+          items:
+            type: string
+    InheritanceMode:
+      type: string
+      enum:
+      - NodeAndDescendants
+      - NodeOnly
+      - DescendantsOnly
+      default: NodeAndDescendants
+    RoleAssignment:
+      type: object
+      required:
+      - id
+      - subject
+      - roleId
+      - scopeNodeId
+      - mode
+      - source
+      properties:
+        id:
+          type: string
+          format: uuid
+        subject:
+          $ref: '#/components/schemas/SubjectRef'
+        roleId:
+          type: string
+          format: uuid
+        scopeNodeId:
+          type: string
+          format: uuid
+        mode:
+          $ref: '#/components/schemas/InheritanceMode'
+        validFrom:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        conditions:
+          $ref: '#/components/schemas/ConditionParameters'
+        source:
+          type: string
+          enum:
+          - Manual
+          - Scim
+          - Jit
+          - Grant
+        createdAt:
+          type: string
+          format: date-time
+    ConditionParameters:
+      type: object
+      description: 'Condition name → parameters, for example {"amount_limit": {"max_amount": 10000}} (C23).'
+      additionalProperties:
+        type: object
+        additionalProperties: true
+    CreateAssignmentRequest:
+      type: object
+      required:
+      - subject
+      - roleId
+      - scopeNodeId
+      properties:
+        subject:
+          $ref: '#/components/schemas/SubjectRef'
+        roleId:
+          type: string
+          format: uuid
+        scopeNodeId:
+          type: string
+          format: uuid
+        mode:
+          $ref: '#/components/schemas/InheritanceMode'
+        validFrom:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        validUntil:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        conditions:
+          $ref: '#/components/schemas/ConditionParameters'
+    Delegation:
+      type: object
+      required:
+      - id
+      - sourceAssignmentId
+      - delegateUserId
+      - validFrom
+      - validUntil
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceAssignmentId:
+          type: string
+          format: uuid
+        delegateUserId:
+          type: string
+          format: uuid
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+    CreateDelegationRequest:
+      type: object
+      required:
+      - sourceAssignmentId
+      - delegateUserId
+      - validFrom
+      - validUntil
+      properties:
+        sourceAssignmentId:
+          type: string
+          format: uuid
+        delegateUserId:
+          type: string
+          format: uuid
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+    ExplainRequest:
+      type: object
+      required:
+      - subject
+      - permission
+      - resource
+      properties:
+        subject:
+          $ref: '#/components/schemas/SubjectRef'
+        permission:
+          type: string
+        resource:
+          type: object
+          required:
+          - type
+          - id
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+              format: uuid
+    ExplainResponse:
+      type: object
+      required:
+      - allowed
+      - paths
+      properties:
+        allowed:
+          type: boolean
+        paths:
+          type: array
+          items:
+            type: object
+            required:
+            - description
+            - steps
+            properties:
+              description:
+                type: string
+                examples:
+                - Region Admin at Egypt Region, inherited
+              steps:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - kind
+                  - label
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                      - assignment
+                      - group
+                      - inherit
+                      - owner
+                      - share
+                      - delegation
+                      - grant
+                    label:
+                      type: string
+                    objectId:
+                      type: string
+                      format: uuid
+    TokenFormat:
+      type: string
+      enum:
+      - Jwt
+      - Reference
+      description: 'G-08 / ADR-0012: JWT (RFC 9068) for first-party clients, reference tokens for third-party clients.'
+    ClientType:
+      type: string
+      enum:
+      - SpaViaBff
+      - Web
+      - Native
+      - Machine
+    Client:
+      type: object
+      required:
+      - id
+      - clientId
+      - name
+      - type
+      - tokenFormat
+      - redirectUris
+      - grantTypes
+      - resources
+      - scopes
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/ClientType'
+        tokenFormat:
+          $ref: '#/components/schemas/TokenFormat'
+        firstParty:
+          type: boolean
+        redirectUris:
+          type: array
+          items:
+            type: string
+            format: uri
+        postLogoutRedirectUris:
+          type: array
+          items:
+            type: string
+            format: uri
+        grantTypes:
+          type: array
+          items:
+            type: string
+        resources:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: API resources the client may request (G-03).
+        defaultResource:
+          type:
+          - string
+          - 'null'
+          format: uri
+        scopes:
+          type: array
+          items:
+            type: string
+        requirePar:
+          type: boolean
+        tokenEndpointAuthMethod:
+          type: string
+          enum:
+          - none
+          - client_secret_basic
+          - private_key_jwt
+        backChannelLogoutUri:
+          type:
+          - string
+          - 'null'
+          format: uri
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    ClientInput:
+      type: object
+      required:
+      - name
+      - type
+      - redirectUris
+      - grantTypes
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        type:
+          $ref: '#/components/schemas/ClientType'
+        tokenFormat:
+          $ref: '#/components/schemas/TokenFormat'
+        firstParty:
+          type: boolean
+        redirectUris:
+          type: array
+          items:
+            type: string
+            format: uri
+        postLogoutRedirectUris:
+          type: array
+          items:
+            type: string
+            format: uri
+        grantTypes:
+          type: array
+          items:
+            type: string
+        resources:
+          type: array
+          items:
+            type: string
+            format: uri
+        defaultResource:
+          type:
+          - string
+          - 'null'
+          format: uri
+        scopes:
+          type: array
+          items:
+            type: string
+        requirePar:
+          type: boolean
+        tokenEndpointAuthMethod:
+          type: string
+          enum:
+          - none
+          - client_secret_basic
+          - private_key_jwt
+        backChannelLogoutUri:
+          type:
+          - string
+          - 'null'
+          format: uri
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    ClientWithSecret:
+      allOf:
+      - $ref: '#/components/schemas/Client'
+      - type: object
+        required: []
+        properties:
+          clientSecret:
+            type: string
+            description: Shown once; only a hash is stored.
+    ClientSecret:
+      type: object
+      required:
+      - id
+      - secret
+      - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        secret:
+          type: string
+          description: Shown once.
+        expiresAt:
+          type: string
+          format: date-time
+    RotateSecretRequest:
+      type: object
+      required: []
+      properties:
+        previousSecretExpiresInHours:
+          type: integer
+          minimum: 0
+          maximum: 720
+          default: 24
+    ClientKeysInput:
+      type: object
+      required: []
+      properties:
+        jwksUri:
+          type:
+          - string
+          - 'null'
+          format: uri
+        jwks:
+          type:
+          - object
+          - 'null'
+    ApiResource:
+      type: object
+      required:
+      - id
+      - identifier
+      - name
+      - scopes
+      properties:
+        id:
+          type: string
+          format: uuid
+        identifier:
+          type: string
+          format: uri
+          examples:
+          - https://invoices.api
+        name:
+          type: string
+        applicationId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: object
+            required:
+            - name
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+    ApiResourceInput:
+      type: object
+      required:
+      - identifier
+      - name
+      - scopes
+      properties:
+        identifier:
+          type: string
+          format: uri
+        name:
+          type: string
+        applicationId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: object
+            required:
+            - name
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+    TokenExchangePolicy:
+      type: object
+      required:
+      - id
+      - clientId
+      - targetResource
+      - allowedScopes
+      - mode
+      - maxChainDepth
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+        sourceAudience:
+          type: string
+        targetResource:
+          type: string
+          format: uri
+        allowedScopes:
+          type: array
+          items:
+            type: string
+        mode:
+          type: string
+          enum:
+          - Delegation
+          - Impersonation
+        maxChainDepth:
+          type: integer
+          minimum: 1
+          maximum: 2
+    TokenExchangePolicyInput:
+      type: object
+      required:
+      - clientId
+      - targetResource
+      - allowedScopes
+      - mode
+      properties:
+        clientId:
+          type: string
+        sourceAudience:
+          type: string
+        targetResource:
+          type: string
+          format: uri
+        allowedScopes:
+          type: array
+          items:
+            type: string
+        mode:
+          type: string
+          enum:
+          - Delegation
+          - Impersonation
+        maxChainDepth:
+          type: integer
+          minimum: 1
+          maximum: 2
+    ServiceAccount:
+      type: object
+      required:
+      - id
+      - name
+      - clientId
+      - enabled
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        clientId:
+          type: string
+        enabled:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    ServiceAccountInput:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        resources:
+          type: array
+          items:
+            type: string
+            format: uri
+        scopes:
+          type: array
+          items:
+            type: string
+    ServiceAccountUpdate:
+      type: object
+      required:
+      - version
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    FederatedCredential:
+      type: object
+      required:
+      - id
+      - issuer
+      - subjectPattern
+      - audience
+      properties:
+        id:
+          type: string
+          format: uuid
+        issuer:
+          type: string
+          format: uri
+        subjectPattern:
+          type: string
+        audience:
+          type: string
+    FederatedCredentialInput:
+      type: object
+      required:
+      - issuer
+      - subjectPattern
+      - audience
+      properties:
+        issuer:
+          type: string
+          format: uri
+        subjectPattern:
+          type: string
+        audience:
+          type: string
+    ApiKey:
+      type: object
+      required:
+      - id
+      - name
+      - prefix
+      - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        prefix:
+          type: string
+        ownerId:
+          type: string
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    ApiKeyInput:
+      type: object
+      required:
+      - name
+      - expiresAt
+      properties:
+        name:
+          type: string
+        serviceAccountId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+    ApiKeyWithSecret:
+      allOf:
+      - $ref: '#/components/schemas/ApiKey'
+      - type: object
+        required:
+        - key
+        properties:
+          key:
+            type: string
+            description: Shown once.
+    IdpConnection:
+      type: object
+      required:
+      - id
+      - name
+      - protocol
+      - enabled
+      - enforced
+      - domains
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        protocol:
+          type: string
+          enum:
+          - Oidc
+          - Saml
+        enabled:
+          type: boolean
+        enforced:
+          type: boolean
+        domains:
+          type: array
+          items:
+            type: string
+          description: Verified tenant domains served by this connection. Email-based account linking is allowed only for these (ADR-0014).
+        oidc:
+          type:
+          - object
+          - 'null'
+          properties:
+            issuer:
+              type: string
+              format: uri
+            clientId:
+              type: string
+            scopes:
+              type: array
+              items:
+                type: string
+        saml:
+          type:
+          - object
+          - 'null'
+          properties:
+            metadataUrl:
+              type: string
+              format: uri
+            entityId:
+              type: string
+            certificateExpiresAt:
+              type: string
+              format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    IdpConnectionInput:
+      type: object
+      required:
+      - name
+      - protocol
+      properties:
+        name:
+          type: string
+        protocol:
+          type: string
+          enum:
+          - Oidc
+          - Saml
+        enabled:
+          type: boolean
+        domains:
+          type: array
+          items:
+            type: string
+        oidc:
+          type:
+          - object
+          - 'null'
+          properties:
+            issuer:
+              type: string
+              format: uri
+            clientId:
+              type: string
+            clientSecret:
+              type: string
+              writeOnly: true
+            scopes:
+              type: array
+              items:
+                type: string
+        saml:
+          type:
+          - object
+          - 'null'
+          properties:
+            metadataUrl:
+              type: string
+              format: uri
+            metadataXml:
+              type: string
+        version:
+          type: integer
+          format: int64
+          description: Optimistic concurrency version. Send the version you read; a stale version returns 409 platform.concurrency_conflict.
+    ClaimMapping:
+      type: object
+      required:
+      - claim
+      - value
+      - target
+      properties:
+        claim:
+          type: string
+        value:
+          type: string
+        target:
+          type: object
+          required:
+          - kind
+          properties:
+            kind:
+              type: string
+              enum:
+              - Node
+              - Role
+            nodeCode:
+              type: string
+            roleId:
+              type: string
+              format: uuid
+            mode:
+              $ref: '#/components/schemas/InheritanceMode'
+    ScimToken:
+      type: object
+      required:
+      - id
+      - createdAt
+      - expiresAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        lastUsedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    ScimTokenWithSecret:
+      allOf:
+      - $ref: '#/components/schemas/ScimToken'
+      - type: object
+        required:
+        - token
+        - endpoint
+        properties:
+          token:
+            type: string
+            description: Shown once.
+          endpoint:
+            type: string
+            format: uri
+    AuditEntry:
+      type: object
+      required:
+      - id
+      - action
+      - at
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        impersonatorId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        action:
+          type: string
+        target:
+          type:
+          - string
+          - 'null'
+        before:
+          type:
+          - object
+          - 'null'
+        after:
+          type:
+          - object
+          - 'null'
+        ip:
+          type:
+          - string
+          - 'null'
+        correlationId:
+          type:
+          - string
+          - 'null'
+        at:
+          type: string
+          format: date-time
+    Webhook:
+      type: object
+      required:
+      - id
+      - url
+      - eventTypes
+      - enabled
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        eventTypes:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+    WebhookInput:
+      type: object
+      required:
+      - url
+      - eventTypes
+      properties:
+        url:
+          type: string
+          format: uri
+        eventTypes:
+          type: array
+          items:
+            type: string
+    WebhookWithSecret:
+      allOf:
+      - $ref: '#/components/schemas/Webhook'
+      - type: object
+        required:
+        - secret
+        properties:
+          secret:
+            type: string
+            description: Shown once.
+    WebhookDelivery:
+      type: object
+      required:
+      - id
+      - eventType
+      - status
+      - attempts
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        status:
+          type: string
+          enum:
+          - Pending
+          - Delivered
+          - Failed
+          - DeadLettered
+        attempts:
+          type: integer
+        lastAttemptAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        responseStatus:
+          type:
+          - integer
+          - 'null'
+    Me:
+      type: object
+      required:
+      - id
+      - email
+      - emailVerified
+      - displayName
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        emailVerified:
+          type: boolean
+        displayName:
+          type: string
+        locale:
+          type: string
+          enum:
+          - en
+          - ar
+        pictureUrl:
+          type:
+          - string
+          - 'null'
+          format: uri
+    UpdateMeRequest:
+      type: object
+      required: []
+      properties:
+        displayName:
+          type: string
+          maxLength: 200
+        locale:
+          type: string
+          enum:
+          - en
+          - ar
+    ChangePasswordRequest:
+      type: object
+      required:
+      - currentPassword
+      - newPassword
+      properties:
+        currentPassword:
+          type: string
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 12
+          writeOnly: true
+        signOutOtherSessions:
+          type: boolean
+          default: true
+    MfaFactor:
+      type: object
+      required:
+      - id
+      - type
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - totp
+          - recovery_codes
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        remainingCodes:
+          type:
+          - integer
+          - 'null'
+    Passkey:
+      type: object
+      required:
+      - id
+      - name
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    Session:
+      type: object
+      required:
+      - id
+      - tenantId
+      - createdAt
+      - lastSeenAt
+      - current
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        device:
+          type: string
+        ip:
+          type: string
+        location:
+          type:
+          - string
+          - 'null'
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+    MyTenant:
+      type: object
+      required:
+      - tenantId
+      - slug
+      - name
+      - membershipType
+      - status
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        membershipType:
+          type: string
+          enum:
+          - Member
+          - Guest
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
+        primaryNodeId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    ConnectedApp:
+      type: object
+      required:
+      - id
+      - clientId
+      - name
+      - scopes
+      - grantedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        grantedAt:
+          type: string
+          format: date-time

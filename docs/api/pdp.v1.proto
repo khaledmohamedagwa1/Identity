@@ -1,0 +1,146 @@
+// Identity Platform PDP gRPC API v1 - frozen at G0 (F-06). Mirrors pdp.v1.yaml; see ADR-0013 for authentication.
+// Callers authenticate with a bearer token in the "authorization" metadata entry.
+syntax = "proto3";
+
+package platform.pdp.v1;
+
+option csharp_namespace = "Platform.Authorization.Grpc.V1";
+
+import "google/protobuf/struct.proto";
+
+service DecisionService {
+  // Check one permission.
+  rpc Check(CheckRequest) returns (CheckResponse);
+  // Check up to 100 permissions; results in request order.
+  rpc BatchCheck(BatchCheckRequest) returns (BatchCheckResponse);
+  // List object ids of a type the subject can act on (paged).
+  rpc ListObjects(ListObjectsRequest) returns (ListObjectsResponse);
+  // List subjects with a permission on a resource (requires access_explain).
+  rpc ListSubjects(ListSubjectsRequest) returns (ListSubjectsResponse);
+  // Explain all access paths.
+  rpc Expand(ExpandRequest) returns (ExpandResponse);
+  // Effective permission keys at a node for UI rendering.
+  rpc GetMyPermissions(GetMyPermissionsRequest) returns (GetMyPermissionsResponse);
+}
+
+enum SubjectType {
+  SUBJECT_TYPE_UNSPECIFIED = 0;
+  SUBJECT_TYPE_USER = 1;
+  SUBJECT_TYPE_GROUP = 2;
+  SUBJECT_TYPE_SERVICE_ACCOUNT = 3;
+}
+
+enum Consistency {
+  CONSISTENCY_UNSPECIFIED = 0;
+  CONSISTENCY_MINIMIZE_LATENCY = 1;
+  CONSISTENCY_HIGHER_CONSISTENCY = 2;
+}
+
+message Resource {
+  string type = 1;  // for example "org_node", "invoice"
+  string id = 2;    // UUID in the caller's tenant
+}
+
+message SubjectRef {
+  SubjectType type = 1;
+  string id = 2;    // UUID
+}
+
+message CheckFields {
+  string permission = 1;              // snake_case key, ADR-0016
+  Resource resource = 2;
+  google.protobuf.Struct context = 3; // condition context (C23)
+}
+
+message CheckRequest {
+  CheckFields check = 1;
+  string subject_token = 2;           // end user access token (resource-server callers only)
+  SubjectRef subject = 3;             // other subject; requires access_explain
+  Consistency consistency = 4;
+  int64 min_revision = 5;             // 0 = none
+}
+
+message CheckResponse {
+  bool allowed = 1;
+  string decision_id = 2;
+  bool stale = 3;
+  string reason = 4;                  // missing_context | tenant_suspended | no_membership | impersonation_policy
+}
+
+message BatchCheckRequest {
+  repeated CheckFields checks = 1;    // 1..100
+  string subject_token = 2;
+  SubjectRef subject = 3;
+  int64 min_revision = 4;
+}
+
+message BatchCheckResult {
+  bool allowed = 1;
+  string decision_id = 2;
+  string reason = 3;
+}
+
+message BatchCheckResponse {
+  repeated BatchCheckResult results = 1;
+  bool stale = 2;
+}
+
+message ListObjectsRequest {
+  string permission = 1;
+  string resource_type = 2;
+  string subject_token = 3;
+  SubjectRef subject = 4;
+  google.protobuf.Struct context = 5;
+  string cursor = 6;
+  int32 limit = 7;
+}
+
+message ListObjectsResponse {
+  repeated string ids = 1;
+  string next_cursor = 2;
+}
+
+message ListSubjectsRequest {
+  string permission = 1;
+  Resource resource = 2;
+  string subject_token = 3;
+  repeated SubjectType subject_types = 4;
+}
+
+message ListSubjectsResponse {
+  repeated SubjectRef subjects = 1;
+}
+
+message ExpandRequest {
+  string permission = 1;
+  Resource resource = 2;
+  string subject_token = 3;
+  SubjectRef subject = 4;
+}
+
+message ExpandStep {
+  string kind = 1;    // assignment | group | inherit | owner | share | delegation | grant
+  string label = 2;
+  string object_id = 3;
+}
+
+message ExpandPath {
+  string description = 1;
+  repeated ExpandStep steps = 2;
+}
+
+message ExpandResponse {
+  bool allowed = 1;
+  repeated ExpandPath paths = 2;
+}
+
+message GetMyPermissionsRequest {
+  string scope_node_id = 1;
+  string application = 2;
+}
+
+message GetMyPermissionsResponse {
+  string scope_node_id = 1;
+  repeated string permissions = 2;
+  int64 authz_version = 3;
+}

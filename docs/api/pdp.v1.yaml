@@ -1,0 +1,351 @@
+# Identity Platform PDP API v1 - frozen at G0 (F-06). Changes need a contract-change PR (docs/contract-changes/).
+openapi: 3.1.0
+info:
+  title: Identity Platform Policy Decision Point
+  version: 1.0.0
+  contact:
+    name: Platform team (lane L5)
+  license:
+    name: Proprietary
+  description: |
+    Fine-grained authorization decisions (spec sections 5.4 and 9.6). gRPC equivalent: `pdp.v1.proto`.
+
+    **How callers authenticate and name the subject (ADR-0013).** There are two caller kinds:
+
+    1. *Resource servers* (customer APIs through the SDK, platform hosts). They call with their **own** client
+       credentials token (`aud` = PDP, scope `pdp.check`) and pass the end user's validated access token in
+       `subjectToken`. The PDP validates that token's signature, issuer, expiry and revocation itself (it does not
+       require its `aud` to be the PDP) and takes `sub`, `tid` and `act` from it. Callers never send a tenant or
+       user id as plain fields, so a compromised app cannot ask about another tenant.
+    2. *Users through the BFF* (portals). They call with the user's own token (`aud` = PDP); `subjectToken` is
+       omitted and the subject is the token's `sub` in tenant `tid`.
+
+    Checking a subject other than the token subject (`subject` field) additionally requires the `access_explain`
+    permission of that subject token holder (explain, access explorer).
+
+    Object ids are UUIDs of the caller's tenant only: the PDP builds OpenFGA ids from the token's `tid`
+    (`t<tenantUuidHex>_<uuidHex>`), so ids of other tenants can never match (TC-Z01-02).
+    The PDP fails closed: when it cannot decide it returns 503, never an allow.
+servers:
+  - url: /
+security:
+  - bearer: []
+tags:
+  - name: Decisions
+  - name: Explain
+paths:
+  /v1/check:
+    post:
+      operationId: check
+      summary: Check one permission
+      description: Returns whether the subject holds the permission on the resource. Pass `minRevision` (the `X-Authz-Revision` of an AdminApi write) for read-your-writes.
+      tags: [Decisions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CheckRequest' }
+      responses:
+        '200':
+          description: Decision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/batch-check:
+    post:
+      operationId: batchCheck
+      summary: Check up to 100 permissions
+      description: Results are returned in the same order as the checks. All checks share one subject token.
+      tags: [Decisions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BatchCheckRequest' }
+      responses:
+        '200':
+          description: Decisions in request order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchCheckResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/list-objects:
+    post:
+      operationId: listObjects
+      summary: List objects of a type the subject can act on
+      description: Paged list of resource ids of `resourceType` on which the subject holds the permission.
+      tags: [Decisions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ListObjectsRequest' }
+      responses:
+        '200':
+          description: Object ids
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListObjectsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/list-subjects:
+    post:
+      operationId: listSubjects
+      summary: List users and groups with a permission on a resource
+      description: Requires `access_explain` on the resource's owning node.
+      tags: [Explain]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ListSubjectsRequest' }
+      responses:
+        '200':
+          description: Subjects
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListSubjectsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/expand:
+    post:
+      operationId: expand
+      summary: Explain why a subject has (or lacks) a permission
+      description: Returns every access path, not only the first (UC-11, Z-04). Output never contains ids from other tenants.
+      tags: [Explain]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExpandRequest' }
+      responses:
+        '200':
+          description: Explanation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExpandResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/me/permissions:
+    get:
+      operationId: getMyPermissions
+      summary: Effective permission keys at a node, for UI rendering
+      description: Uses the caller's own token (BFF). Scoped to the calling application's catalog keys. The server always enforces; this is for hiding UI only.
+      tags: [Decisions]
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          description: Org node id.
+          schema: { type: string, format: uuid }
+        - name: application
+          in: query
+          required: false
+          description: Application key whose catalog to evaluate (defaults to the client's linked application).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Permission keys
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyPermissionsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Resource:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string, examples: [org_node, invoice] }
+        id: { type: string, format: uuid }
+    SubjectRef:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string, enum: [User, Group, ServiceAccount] }
+        id: { type: string, format: uuid }
+    Consistency:
+      type: string
+      enum: [MinimizeLatency, HigherConsistency]
+      default: MinimizeLatency
+    CheckFields:
+      type: object
+      required: [permission, resource]
+      properties:
+        permission: { type: string, description: 'Permission key, snake_case (ADR-0016), for example users_manage.' }
+        resource: { $ref: '#/components/schemas/Resource' }
+        context:
+          type: object
+          additionalProperties: true
+          description: 'Request context for conditions (C23), for example {"amount": 15000}. Missing context for a conditional grant means deny.'
+    CheckRequest:
+      allOf:
+        - $ref: '#/components/schemas/CheckFields'
+        - type: object
+          properties:
+            subjectToken: { type: string, description: 'End user access token (resource-server callers only). Never logged.' }
+            subject: { $ref: '#/components/schemas/SubjectRef' }
+            consistency: { $ref: '#/components/schemas/Consistency' }
+            minRevision: { type: integer, format: int64, description: 'Wait up to 2 s for the tenant sync watermark to reach this revision; otherwise the response has stale=true.' }
+    CheckResponse:
+      type: object
+      required: [allowed, decisionId, stale]
+      properties:
+        allowed: { type: boolean }
+        decisionId: { type: string, format: uuid }
+        stale: { type: boolean, description: 'True when minRevision was not reached within 2 s (the decision may not include the latest writes).' }
+        reason: { type: string, enum: [missing_context, tenant_suspended, no_membership, impersonation_policy], description: 'Set on some denials.' }
+    BatchCheckRequest:
+      type: object
+      required: [checks]
+      properties:
+        subjectToken: { type: string }
+        subject: { $ref: '#/components/schemas/SubjectRef' }
+        minRevision: { type: integer, format: int64 }
+        checks:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/CheckFields' }
+    BatchCheckResponse:
+      type: object
+      required: [results, stale]
+      properties:
+        stale: { type: boolean }
+        results:
+          type: array
+          items:
+            type: object
+            required: [allowed, decisionId]
+            properties:
+              allowed: { type: boolean }
+              decisionId: { type: string, format: uuid }
+              reason: { type: string }
+    ListObjectsRequest:
+      type: object
+      required: [permission, resourceType]
+      properties:
+        subjectToken: { type: string }
+        subject: { $ref: '#/components/schemas/SubjectRef' }
+        permission: { type: string }
+        resourceType: { type: string }
+        context: { type: object, additionalProperties: true }
+        cursor: { type: string }
+        limit: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    ListObjectsResponse:
+      type: object
+      required: [ids]
+      properties:
+        ids: { type: array, items: { type: string, format: uuid } }
+        nextCursor: { type: [string, 'null'] }
+    ListSubjectsRequest:
+      type: object
+      required: [permission, resource]
+      properties:
+        subjectToken: { type: string }
+        permission: { type: string }
+        resource: { $ref: '#/components/schemas/Resource' }
+        subjectTypes: { type: array, items: { type: string, enum: [User, Group, ServiceAccount] } }
+    ListSubjectsResponse:
+      type: object
+      required: [subjects]
+      properties:
+        subjects: { type: array, items: { $ref: '#/components/schemas/SubjectRef' } }
+    ExpandRequest:
+      type: object
+      required: [permission, resource]
+      properties:
+        subjectToken: { type: string }
+        subject: { $ref: '#/components/schemas/SubjectRef' }
+        permission: { type: string }
+        resource: { $ref: '#/components/schemas/Resource' }
+    ExpandResponse:
+      type: object
+      required: [allowed, paths]
+      properties:
+        allowed: { type: boolean }
+        paths:
+          type: array
+          items:
+            type: object
+            required: [description, steps]
+            properties:
+              description: { type: string, examples: ['Region Admin at Egypt Region, inherited'] }
+              steps:
+                type: array
+                items:
+                  type: object
+                  required: [kind, label]
+                  properties:
+                    kind: { type: string, enum: [assignment, group, inherit, owner, share, delegation, grant] }
+                    label: { type: string }
+                    objectId: { type: string, format: uuid }
+    MyPermissionsResponse:
+      type: object
+      required: [scope, permissions]
+      properties:
+        scope: { type: string, format: uuid }
+        permissions: { type: array, items: { type: string } }
+        authzVersion: { type: integer, format: int64, description: 'Per-tenant authorization version for cache invalidation.' }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        traceId: { type: string }
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing or invalid caller token, or invalid subject token.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Caller is not a registered resource server, or lacks access_explain for another subject.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Rate limited (per tenant and per client).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unavailable:
+      description: The PDP cannot decide (engine unreachable). Callers must deny (fail closed).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
