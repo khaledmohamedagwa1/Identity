@@ -153,8 +153,8 @@ paths:
       parameters:
         - name: scope
           in: query
-          required: true
-          description: Org node id.
+          required: false
+          description: Org node id. When omitted, the tenant's root node; the response echoes the resolved id.
           schema: { type: string, format: uuid }
         - name: application
           in: query
@@ -310,7 +310,7 @@ components:
       type: object
       required: [scope, permissions]
       properties:
-        scope: { type: string, format: uuid }
+        scope: { type: string, format: uuid, description: 'The evaluated node (the root node when the request omitted scope).' }
         permissions: { type: array, items: { type: string } }
         authzVersion: { type: integer, format: int64, description: 'Per-tenant authorization version for cache invalidation.' }
     Problem:

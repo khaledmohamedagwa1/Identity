@@ -135,7 +135,7 @@ message ExpandResponse {
 }
 
 message GetMyPermissionsRequest {
-  string scope_node_id = 1;
+  string scope_node_id = 1;  // empty = tenant root node
   string application = 2;
 }
 
