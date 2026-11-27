@@ -1,0 +1,82 @@
+// Design tokens: the single source of brand decisions for both portals.
+// Components use the CSS custom properties (--ip-*, --mat-sys-*), never raw values.
+@use 'sass:map';
+@use 'sass:math';
+
+$color: (
+  primary: #1f4fd1,
+  on-primary: #ffffff,
+  primary-container: #dce4ff,
+  on-primary-container: #001550,
+  secondary: #4f5b75,
+  error: #ba1a1a,
+  surface: #fbfaff,
+  on-surface: #1a1b21,
+  success: #1b7f3b,
+  warning: #8a5300,
+);
+
+$color-dark: (
+  primary: #b4c5ff,
+  on-primary: #002780,
+  primary-container: #003bb3,
+  on-primary-container: #dce4ff,
+  secondary: #b8c3df,
+  error: #ffb4ab,
+  surface: #121318,
+  on-surface: #e3e2e9,
+  success: #8fd8a1,
+  warning: #ffb95c,
+);
+
+// Latin first, then Arabic-capable system fonts; no web-font download (strict CSP, spec 7.9).
+$font-family:
+  'Segoe UI',
+  system-ui,
+  -apple-system,
+  Roboto,
+  'Noto Sans',
+  'Noto Sans Arabic',
+  Tahoma,
+  Arial,
+  sans-serif;
+
+$space-unit: 4px;
+$radius: (
+  sm: 4px,
+  md: 8px,
+  lg: 16px,
+);
+$layout: (
+  nav-width: 256px,
+  content-max-width: 1200px,
+);
+$density: 0;
+
+@function color($name, $scheme: light) {
+  $map: if($scheme == dark, $color-dark, $color);
+  @return map.get($map, $name);
+}
+
+/// Spacing scale: space(1) = 4px, space(4) = 16px.
+@function space($steps) {
+  @return math.div($steps * $space-unit, 1px) * 1px;
+}
+
+@mixin custom-properties {
+  --ip-font-family: #{$font-family};
+  --ip-space-unit: #{$space-unit};
+  @each $name, $value in $radius {
+    --ip-radius-#{$name}: #{$value};
+  }
+  @each $name, $value in $layout {
+    --ip-#{$name}: #{$value};
+  }
+  --ip-color-success: #{color(success)};
+  --ip-color-warning: #{color(warning)};
+}
+
+@mixin custom-properties-dark {
+  --ip-color-success: #{color(success, dark)};
+  --ip-color-warning: #{color(warning, dark)};
+}

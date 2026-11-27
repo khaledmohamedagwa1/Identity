@@ -1,0 +1,33 @@
+# PLACEHOLDER until task F-06 publishes ../docs/api/pdp.v1.yaml.
+# Only the endpoint the portals call is described here (spec section 5.4).
+openapi: 3.1.0
+info:
+  title: PDP (stub)
+  version: 0.0.0-stub
+paths:
+  /v1/me/permissions:
+    get:
+      operationId: getMyPermissions
+      tags: [Me]
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          description: Org node ID. Omit for the tenant root.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Effective permission keys at the node, for UI rendering only
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyPermissionsResponse' }
+components:
+  schemas:
+    MyPermissionsResponse:
+      type: object
+      required: [permissions]
+      properties:
+        scope: { type: string, format: uuid }
+        permissions:
+          type: array
+          items: { type: string }

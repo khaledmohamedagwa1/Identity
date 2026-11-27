@@ -1,0 +1,61 @@
+@use 'tokens' as tokens;
+
+:host {
+  display: block;
+  height: 100%;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.skip-link {
+  position: absolute;
+  inset-inline-start: tokens.space(2);
+  inset-block-start: -100px;
+  z-index: 10;
+  padding: tokens.space(2) tokens.space(3);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  border-radius: var(--ip-radius-sm);
+
+  &:focus {
+    inset-block-start: tokens.space(2);
+  }
+}
+
+.shell-toolbar {
+  gap: tokens.space(2);
+  background: var(--mat-sys-surface-container);
+  border-block-end: 1px solid var(--mat-sys-outline-variant);
+}
+
+.shell-title {
+  font: var(--mat-sys-title-large);
+}
+
+.tenant-name {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.shell-body {
+  flex: 1 1 auto;
+}
+
+.shell-nav {
+  width: var(--ip-nav-width);
+  border-inline-end: 1px solid var(--mat-sys-outline-variant);
+}
+
+.shell-main {
+  padding: tokens.space(6);
+  max-width: var(--ip-content-max-width);
+  outline: none;
+}
