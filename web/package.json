@@ -1,0 +1,59 @@
+{
+  "name": "identity-platform-web",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "api:generate": "node scripts/generate-api.mjs",
+    "prestart": "npm run api:generate",
+    "start": "ng serve admin-portal",
+    "start:account": "npm run api:generate && ng serve account-portal",
+    "prebuild": "npm run api:generate",
+    "build": "ng build admin-portal && ng build account-portal",
+    "pretest": "npm run api:generate",
+    "test": "ng test shared --watch=false && ng test admin-portal --watch=false && ng test account-portal --watch=false",
+    "prelint": "npm run api:generate",
+    "lint": "ng lint",
+    "test:api-regeneration": "node --test scripts/verify-client-regeneration.test.mjs",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "licenses:check": "node scripts/check-licenses.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "e2e:typecheck": "tsc -p e2e/tsconfig.json --noEmit"
+  },
+  "private": true,
+  "packageManager": "npm@10.9.9",
+  "dependencies": {
+    "@angular/cdk": "^22.3.0",
+    "@angular/common": "^22.3.0",
+    "@angular/compiler": "^22.3.0",
+    "@angular/core": "^22.3.0",
+    "@angular/forms": "^22.3.0",
+    "@angular/material": "^22.3.0",
+    "@angular/platform-browser": "^22.3.0",
+    "@angular/router": "^22.3.0",
+    "@ngrx/signals": "^22.0.1",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.3.0",
+    "@angular/cli": "^22.3.0",
+    "@angular/compiler-cli": "^22.3.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.7",
+    "angular-eslint": "22.8.0",
+    "eslint": "^10.14.0",
+    "js-yaml": "^4.3.2",
+    "jsdom": "^31.0.0",
+    "license-checker-rseidelsohn": "^4.4.2",
+    "ng-openapi-gen": "^1.1.0",
+    "prettier": "^3.8.1",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "8.72.2",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

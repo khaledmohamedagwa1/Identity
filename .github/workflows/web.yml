@@ -1,0 +1,85 @@
+name: web
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'docs/api/**'
+      - '.github/workflows/web.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'docs/api/**'
+      - '.github/workflows/web.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  web:
+    name: Lint, test, build, e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: License allow-list
+        run: npm run licenses:check
+
+      - name: Generate API clients
+        run: npm run api:generate
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npx ng lint
+
+      - name: Unit tests
+        run: |
+          npx ng test shared --watch=false
+          npx ng test admin-portal --watch=false
+          npx ng test account-portal --watch=false
+
+      - name: API client regeneration (TC-F10-02)
+        run: npm run test:api-regeneration
+
+      - name: Build
+        run: |
+          npx ng build admin-portal
+          npx ng build account-portal
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E type check
+        run: npm run e2e:typecheck
+
+      - name: E2E smoke, LTR and RTL (TC-F10-01)
+        run: npm run e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 7

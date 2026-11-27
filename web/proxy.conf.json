@@ -1,0 +1,5 @@
+{
+  "/bff": { "target": "https://localhost:7100", "secure": false, "changeOrigin": false },
+  "/api": { "target": "https://localhost:7100", "secure": false, "changeOrigin": false },
+  "/pdp": { "target": "https://localhost:7100", "secure": false, "changeOrigin": false }
+}

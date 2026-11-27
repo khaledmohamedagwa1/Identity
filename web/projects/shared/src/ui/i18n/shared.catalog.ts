@@ -1,0 +1,48 @@
+import type { Catalogs } from './translation.service';
+
+/** Texts used by the shared shell and pages. Apps add their own catalogs with provideI18n(). */
+export const SHARED_CATALOG: Catalogs = {
+  en: {
+    'shell.skipToContent': 'Skip to main content',
+    'shell.navigation': 'Main navigation',
+    'shell.toggleNav': 'Toggle navigation',
+    'shell.language': 'العربية',
+    'shell.languageLabel': 'Switch language to Arabic',
+    'shell.account': 'Account menu',
+    'shell.signIn': 'Sign in',
+    'shell.signOut': 'Sign out',
+    'shell.tenant': 'Tenant',
+    'shell.switchTenant': 'Switch tenant',
+    'page.forbidden.title': 'Access denied',
+    'page.forbidden.body': 'You do not have permission to open this page.',
+    'page.notFound.title': 'Page not found',
+    'page.notFound.body': 'The page you are looking for does not exist.',
+    'page.signedOut.title': 'You are signed out',
+    'page.signedOut.body': 'Sign in to continue.',
+    'page.noTenant.title': 'No organization yet',
+    'page.noTenant.body':
+      'Your account is not a member of any organization. Ask an administrator to invite you.',
+    'page.home': 'Go to home',
+  },
+  ar: {
+    'shell.skipToContent': 'انتقل إلى المحتوى الرئيسي',
+    'shell.navigation': 'التنقل الرئيسي',
+    'shell.toggleNav': 'إظهار أو إخفاء القائمة',
+    'shell.language': 'English',
+    'shell.languageLabel': 'تغيير اللغة إلى الإنجليزية',
+    'shell.account': 'قائمة الحساب',
+    'shell.signIn': 'تسجيل الدخول',
+    'shell.signOut': 'تسجيل الخروج',
+    'shell.tenant': 'المؤسسة',
+    'shell.switchTenant': 'تبديل المؤسسة',
+    'page.forbidden.title': 'تم رفض الوصول',
+    'page.forbidden.body': 'ليست لديك صلاحية لفتح هذه الصفحة.',
+    'page.notFound.title': 'الصفحة غير موجودة',
+    'page.notFound.body': 'الصفحة التي تبحث عنها غير موجودة.',
+    'page.signedOut.title': 'لقد سجلت الخروج',
+    'page.signedOut.body': 'سجّل الدخول للمتابعة.',
+    'page.noTenant.title': 'لا توجد مؤسسة بعد',
+    'page.noTenant.body': 'حسابك ليس عضوًا في أي مؤسسة. اطلب من المسؤول دعوتك.',
+    'page.home': 'الذهاب إلى الصفحة الرئيسية',
+  },
+};

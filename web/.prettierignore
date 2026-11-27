@@ -1,0 +1,9 @@
+dist
+.angular
+node_modules
+coverage
+tmp
+playwright-report
+test-results
+projects/shared/src/api-clients/generated
+package-lock.json

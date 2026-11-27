@@ -1,0 +1,109 @@
+<div class="shell" [dir]="i18n.dir()">
+  <a class="skip-link" href="#main-content">{{ 'shell.skipToContent' | t }}</a>
+
+  <mat-toolbar class="shell-toolbar" role="banner">
+    @if (isHandset()) {
+      <button
+        mat-button
+        type="button"
+        class="nav-toggle"
+        [attr.aria-label]="'shell.toggleNav' | t"
+        (click)="sidenav.toggle()"
+      >
+        ☰
+      </button>
+    }
+    <span class="shell-title" data-testid="app-title">{{ titleKey() | t }}</span>
+
+    @if (auth.activeTenant(); as tenant) {
+      @if (otherTenants().length > 0) {
+        <button
+          mat-button
+          type="button"
+          class="tenant-button"
+          data-testid="tenant-switcher"
+          [matMenuTriggerFor]="tenantMenu"
+          [attr.aria-label]="'shell.switchTenant' | t"
+        >
+          {{ tenant.name }}
+        </button>
+        <mat-menu #tenantMenu="matMenu">
+          @for (other of otherTenants(); track other.id) {
+            <button mat-menu-item type="button" (click)="auth.switchTenant(other.slug)">
+              {{ other.name }}
+            </button>
+          }
+        </mat-menu>
+      } @else {
+        <span class="tenant-name" data-testid="tenant-name">{{ tenant.name }}</span>
+      }
+    }
+
+    <span class="spacer"></span>
+
+    <button
+      mat-button
+      type="button"
+      data-testid="language-toggle"
+      [attr.lang]="i18n.locale() === 'ar' ? 'en' : 'ar'"
+      [attr.aria-label]="'shell.languageLabel' | t"
+      (click)="i18n.toggle()"
+    >
+      {{ 'shell.language' | t }}
+    </button>
+
+    @if (auth.user(); as user) {
+      <button
+        mat-button
+        type="button"
+        data-testid="account-menu"
+        [matMenuTriggerFor]="accountMenu"
+        [attr.aria-label]="'shell.account' | t"
+      >
+        {{ user.name ?? user.email ?? user.sub }}
+      </button>
+      <mat-menu #accountMenu="matMenu">
+        <button mat-menu-item type="button" data-testid="sign-out" (click)="auth.logout()">
+          {{ 'shell.signOut' | t }}
+        </button>
+      </mat-menu>
+    } @else {
+      <button mat-flat-button type="button" (click)="auth.login()">{{ 'shell.signIn' | t }}</button>
+    }
+  </mat-toolbar>
+
+  <mat-sidenav-container class="shell-body">
+    <mat-sidenav
+      #sidenav
+      class="shell-nav"
+      data-testid="side-nav"
+      [mode]="isHandset() ? 'over' : 'side'"
+      [opened]="!isHandset()"
+    >
+      <nav [attr.aria-label]="'shell.navigation' | t">
+        <mat-nav-list>
+          @for (item of visibleNav(); track item.link) {
+            <a
+              mat-list-item
+              [routerLink]="item.link"
+              routerLinkActive="active"
+              #rla="routerLinkActive"
+              [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+              [activated]="rla.isActive"
+              [attr.aria-current]="rla.isActive ? 'page' : null"
+              (click)="isHandset() && sidenav.close()"
+            >
+              {{ item.labelKey | t }}
+            </a>
+          }
+        </mat-nav-list>
+      </nav>
+    </mat-sidenav>
+
+    <mat-sidenav-content>
+      <main id="main-content" class="shell-main" data-testid="main-content" tabindex="-1">
+        <router-outlet />
+      </main>
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+</div>

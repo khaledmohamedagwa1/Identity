@@ -1,0 +1,4 @@
+// Global styles: theme and base rules come from the shared design tokens.
+@use 'theme';
+
+@include theme.apply();
